@@ -1,0 +1,5 @@
+{
+  "name": "NovaScribe",
+  "description": "A powerful creative writing assistant that connects to your preferred LLMs, including local models, OpenRouter, and NVIDIA NIM.",
+  "requestFramePermissions": []
+}
