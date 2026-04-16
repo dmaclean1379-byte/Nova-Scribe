@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   BookOpen, 
   Settings, 
@@ -15,10 +15,13 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
 import { StoryState, LLMConfig, ThemeConfig, ThemeMode } from './types';
 import { storage } from './lib/storage';
+import { syncService } from './services/syncService';
+import { useSyncStatus } from './hooks/useSyncStatus';
 import Editor from './components/Editor';
 import StoryBible from './components/StoryBible';
 import ToolsPanel from './components/ToolsPanel';
@@ -49,6 +52,12 @@ export default function App() {
   const [llmConfig, setLlmConfig] = useState<LLMConfig>(DEFAULT_LLM_CONFIG);
   const [theme, setTheme] = useState<ThemeConfig>(DEFAULT_THEME);
   const [isInitializing, setIsInitializing] = useState(true);
+  const storiesRef = useRef<StoryState[]>([]);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    storiesRef.current = stories;
+  }, [stories]);
 
   // Initial load from IndexedDB
   useEffect(() => {
@@ -61,22 +70,31 @@ export default function App() {
       const savedLlmConfig = await storage.getConfig<LLMConfig>('llm_config');
       const savedTheme = await storage.getConfig<ThemeConfig>('theme_config');
 
-      if (savedStories.length > 0) {
-        setStories(savedStories);
-        setCurrentStoryId(savedCurrentId || savedStories[0].id);
-      } else {
+      let currentStories = savedStories;
+      if (savedStories.length === 0) {
         const initialStory = createNewStory();
-        setStories([initialStory]);
-        setCurrentStoryId(initialStory.id);
+        currentStories = [initialStory];
       }
+      
+      setStories(currentStories);
+      setCurrentStoryId(savedCurrentId || currentStories[0].id);
 
       if (savedLlmConfig) setLlmConfig(savedLlmConfig);
       if (savedTheme) setTheme(savedTheme);
       
       setIsInitializing(false);
+
+      // Start Auto-Sync
+      syncService.startAutoSync(
+        () => storiesRef.current,
+        (synced) => {
+          setStories(prev => prev.map(p => synced.find(s => s.id === p.id) || p));
+        }
+      );
     };
 
     initStorage();
+    return () => syncService.stopAutoSync();
   }, []);
 
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
@@ -104,6 +122,7 @@ export default function App() {
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date>(new Date());
   const [isAutoSaving, setIsAutoSaving] = useState(false);
+  const syncStatus = useSyncStatus();
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -182,7 +201,7 @@ export default function App() {
   const updateStory = (updates: Partial<StoryState>) => {
     setStories(prev => prev.map(s => 
       s.id === currentStoryId 
-        ? { ...s, ...updates, lastModified: Date.now() } 
+        ? { ...s, ...updates, lastModified: Date.now(), isDirty: true } 
         : s
     ));
   };
@@ -415,11 +434,26 @@ export default function App() {
               </Badge>
             </div>
             <div className="flex items-center gap-1 md:gap-2">
-              <div className="hidden sm:flex items-center gap-2 px-3 py-1 rounded-full bg-secondary/50 border border-border/50">
-                <Save size={12} className={isAutoSaving ? "text-accent animate-pulse" : "text-muted"} />
-                <span className="text-[9px] text-muted uppercase tracking-widest font-medium">
-                  {isAutoSaving ? "Auto-saving..." : `Saved ${lastSaved.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`}
-                </span>
+              <div className="hidden sm:flex items-center gap-3 px-3 py-1 rounded-full bg-secondary/50 border border-border/50">
+                <div className="flex items-center gap-2">
+                  <Save size={12} className={isAutoSaving ? "text-accent animate-pulse" : "text-muted"} />
+                  <span className="text-[9px] text-muted uppercase tracking-widest font-medium">
+                    {isAutoSaving ? "Saving..." : `Saved ${lastSaved.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`}
+                  </span>
+                </div>
+                
+                <Separator orientation="vertical" className="h-3 mx-1" />
+                
+                <div className="flex items-center gap-2">
+                  <div className={`w-1.5 h-1.5 rounded-full ${
+                    syncStatus === 'online' ? 'bg-green-500' : 
+                    syncStatus === 'syncing' ? 'bg-accent animate-pulse' : 
+                    syncStatus === 'error' ? 'bg-red-500' : 'bg-gray-400'
+                  }`} />
+                  <span className="text-[9px] text-muted uppercase tracking-widest font-medium">
+                    {syncStatus}
+                  </span>
+                </div>
               </div>
               <Tooltip>
                 <TooltipTrigger asChild>

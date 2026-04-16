@@ -52,6 +52,11 @@ export const storage = {
     await tx.done;
   },
 
+  async clearStories(): Promise<void> {
+    const db = await getDB();
+    await db.clear(STORE_NAME);
+  },
+
   // Config/Settings
   async getConfig<T>(key: string): Promise<T | null> {
     const db = await getDB();

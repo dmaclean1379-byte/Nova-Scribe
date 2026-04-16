@@ -21,6 +21,8 @@ export interface StoryState {
   content: string;
   bible: StoryBibleEntry[];
   lastModified: number;
+  isDirty?: boolean;
+  syncStatus?: 'synced' | 'unsynced' | 'syncing';
 }
 
 export type ThemeMode = 'light' | 'dark' | 'sepia';
