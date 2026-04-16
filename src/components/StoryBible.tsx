@@ -64,7 +64,7 @@ export default function StoryBible({ entries, onUpdate }: StoryBibleProps) {
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted" />
             <Input 
-              placeholder="Search bible..." 
+              placeholder="Search project bible..." 
               className="pl-9 bg-paper border-none"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -109,7 +109,7 @@ export default function StoryBible({ entries, onUpdate }: StoryBibleProps) {
                     </span>
                   </div>
                 </div>
-                <p className="text-xs text-gray-500 line-clamp-1">
+                <p className="text-xs text-muted line-clamp-1">
                   {entry.description || 'No description...'}
                 </p>
               </button>

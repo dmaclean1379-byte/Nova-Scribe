@@ -130,7 +130,7 @@ export default function App() {
       light: {
         '--bg-paper': '#fdfcfb',
         '--text-ink': '#1a1a1a',
-        '--text-muted': '#4b5563',
+        '--text-muted': '#374151',
         '--bg-secondary': '#f3f4f6',
         '--border-color': '#e5e7eb',
         '--primary-foreground': '#ffffff',
@@ -138,7 +138,7 @@ export default function App() {
       dark: {
         '--bg-paper': '#121212',
         '--text-ink': '#e5e7eb',
-        '--text-muted': '#9ca3af',
+        '--text-muted': '#d1d5db',
         '--bg-secondary': '#1f1f1f',
         '--border-color': '#2d2d2d',
         '--primary-foreground': '#ffffff',
@@ -146,7 +146,7 @@ export default function App() {
       sepia: {
         '--bg-paper': '#f4ecd8',
         '--text-ink': '#433422',
-        '--text-muted': '#705c44',
+        '--text-muted': '#5d4a36',
         '--bg-secondary': '#e8dfc4',
         '--border-color': '#d3c5a3',
         '--primary-foreground': '#ffffff',
@@ -271,7 +271,7 @@ export default function App() {
               />
               <SidebarItem 
                 icon={<BookOpen size={20} />} 
-                label="Story Bible" 
+                label="Project Bible" 
                 active={activeTab === 'bible'} 
                 collapsed={!leftSidebarOpen && !mobileMenuOpen}
                 onClick={() => {
@@ -281,7 +281,7 @@ export default function App() {
               />
               <SidebarItem 
                 icon={<Library size={20} />} 
-                label="Library" 
+                label="Manage Projects" 
                 collapsed={!leftSidebarOpen && !mobileMenuOpen}
                 onClick={() => {
                   setLibraryOpen(true);
@@ -289,6 +289,32 @@ export default function App() {
                 }}
               />
             </div>
+
+            {(leftSidebarOpen || mobileMenuOpen) && (
+              <div className="mt-8 px-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-muted mb-2">Your Projects</h3>
+                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleNewStory}>
+                    <Plus size={14} />
+                  </Button>
+                </div>
+                <div className="space-y-1 max-h-[200px] overflow-y-auto custom-scrollbar pr-1">
+                  {stories.map(story => (
+                    <button 
+                      key={story.id}
+                      onClick={() => {
+                        setCurrentStoryId(story.id);
+                        setMobileMenuOpen(false);
+                      }}
+                      className={`w-full text-left px-2 py-1.5 text-sm rounded-md transition-colors flex items-center gap-2 group ${story.id === currentStoryId ? 'bg-accent/10 text-accent font-medium' : 'hover:bg-secondary text-muted'}`}
+                    >
+                      <div className={`w-1.5 h-1.5 rounded-full ${story.id === currentStoryId ? 'bg-accent' : 'bg-muted/40 group-hover:bg-muted'}`} />
+                      <span className="truncate">{story.title}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {(leftSidebarOpen || mobileMenuOpen) && currentStory && (
               <div className="mt-8 px-4">
@@ -352,7 +378,8 @@ export default function App() {
                 type="text" 
                 value={currentStory?.title || ""}
                 onChange={(e) => updateStory({ title: e.target.value })}
-                className="bg-transparent border-none font-serif text-base md:text-lg font-medium focus:outline-none w-full max-w-[150px] md:max-w-64 truncate"
+                className="bg-transparent border-none font-serif text-base md:text-lg font-medium focus:outline-none w-full max-w-[200px] md:max-w-80 truncate"
+                placeholder="Project Title"
               />
               <Badge variant="outline" className="hidden sm:flex font-mono text-[10px] uppercase tracking-widest text-muted truncate max-w-[100px] md:max-w-none">
                 {llmConfig.provider}: {llmConfig.model}
@@ -365,6 +392,23 @@ export default function App() {
                   {isAutoSaving ? "Auto-saving..." : `Saved ${lastSaved.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`}
                 </span>
               </div>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-8 w-8 text-muted hover:text-accent"
+                    onClick={() => {
+                      setIsAutoSaving(true);
+                      setLastSaved(new Date());
+                      setTimeout(() => setIsAutoSaving(false), 1000);
+                    }}
+                  >
+                    <Save size={18} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Save Project</TooltipContent>
+              </Tooltip>
               <Button 
                 variant="ghost" 
                 size="icon" 
@@ -514,7 +558,7 @@ function SidebarItem({
         <motion.span 
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="text-sm"
+          className="text-sm font-medium"
         >
           {label}
         </motion.span>

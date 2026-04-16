@@ -25,7 +25,6 @@
 
   --color-popover: var(--color-paper);
   --color-popover-foreground: var(--color-ink);
-  --color-muted: var(--bg-secondary);
 }
 
 @layer base {
