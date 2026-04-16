@@ -5,26 +5,38 @@
   --font-serif: "Libre Baskerville", serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
-  --color-paper: #fdfcfb;
-  --color-ink: #1a1a1a;
-  --color-accent: #6d28d9; /* Darker purple for better contrast */
-  --color-muted: #4b5563; /* Darker gray for better contrast */
+  --color-paper: var(--bg-paper, #fdfcfb);
+  --color-ink: var(--text-ink, #1a1a1a);
+  --color-accent: var(--primary-accent, #6d28d9);
+  --color-muted: var(--text-muted, #4b5563);
   
   /* Map standard shadcn/tailwind variables to our theme */
   --color-background: var(--color-paper);
   --color-foreground: var(--color-ink);
   --color-primary: var(--color-accent);
-  --color-primary-foreground: #ffffff;
-  --color-secondary: #f3f4f6;
+  --color-primary-foreground: var(--primary-foreground, #ffffff);
+  --color-secondary: var(--bg-secondary, #f3f4f6);
   --color-secondary-foreground: var(--color-ink);
   --color-muted-foreground: var(--color-muted);
   --color-accent-foreground: var(--color-accent);
-  --color-border: #e5e7eb;
-  --color-input: #e5e7eb;
+  --color-border: var(--border-color, #e5e7eb);
+  --color-input: var(--border-color, #e5e7eb);
   --color-ring: var(--color-accent);
+
+  --color-popover: var(--color-paper);
+  --color-popover-foreground: var(--color-ink);
+  --color-muted: var(--bg-secondary);
 }
 
 @layer base {
+  html, body, #root {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
   body {
     @apply bg-paper text-ink font-sans antialiased;
   }

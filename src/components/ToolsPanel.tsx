@@ -90,26 +90,26 @@ export default function ToolsPanel({ story, llmConfig, onApplyChanges }: ToolsPa
   };
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
-      <Tabs value={activeTool} onValueChange={setActiveTool} className="flex-1 flex flex-col">
-        <div className="px-2 md:px-4 py-2 border-b border-gray-100">
-          <TabsList className="grid grid-cols-4 w-full h-8 md:h-9 bg-gray-200/50">
-            <TabsTrigger value="describe" className="text-[9px] md:text-[10px] uppercase tracking-wider font-bold text-gray-700 data-[state=active]:text-accent">Describe</TabsTrigger>
-            <TabsTrigger value="rewrite" className="text-[9px] md:text-[10px] uppercase tracking-wider font-bold text-gray-700 data-[state=active]:text-accent">Rewrite</TabsTrigger>
-            <TabsTrigger value="expand" className="text-[9px] md:text-[10px] uppercase tracking-wider font-bold text-gray-700 data-[state=active]:text-accent">Expand</TabsTrigger>
-            <TabsTrigger value="brain" className="text-[9px] md:text-[10px] uppercase tracking-wider font-bold text-gray-700 data-[state=active]:text-accent">Ideas</TabsTrigger>
+    <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+      <Tabs value={activeTool} onValueChange={setActiveTool} className="flex-1 flex flex-col min-h-0">
+        <div className="px-2 md:px-4 py-2 border-b border-border">
+          <TabsList className="grid grid-cols-4 w-full h-8 md:h-9 bg-secondary">
+            <TabsTrigger value="describe" className="text-[9px] md:text-[10px] uppercase tracking-wider font-bold text-muted data-[state=active]:text-accent">Describe</TabsTrigger>
+            <TabsTrigger value="rewrite" className="text-[9px] md:text-[10px] uppercase tracking-wider font-bold text-muted data-[state=active]:text-accent">Rewrite</TabsTrigger>
+            <TabsTrigger value="expand" className="text-[9px] md:text-[10px] uppercase tracking-wider font-bold text-muted data-[state=active]:text-accent">Expand</TabsTrigger>
+            <TabsTrigger value="brain" className="text-[9px] md:text-[10px] uppercase tracking-wider font-bold text-muted data-[state=active]:text-accent">Ideas</TabsTrigger>
           </TabsList>
         </div>
 
-        <ScrollArea className="flex-1">
-          <div className="p-3 md:p-4 space-y-4 md:space-y-6">
+        <ScrollArea className="flex-1 min-h-0">
+          <div className="p-3 md:p-4 pb-24 space-y-4 md:space-y-6 touch-pan-y">
             <TabsContent value="describe" className="m-0 space-y-4">
               <div className="space-y-2">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-gray-600">Sensory Detail</label>
+                <label className="text-[10px] font-bold uppercase tracking-widest text-muted">Sensory Detail</label>
                 <Textarea 
                   id="describe-input"
                   placeholder="e.g. 'the old library', 'a cold winter morning'..."
-                  className="text-sm bg-gray-50 border-none resize-none"
+                  className="text-sm bg-paper border-none resize-none"
                 />
                 <Button 
                   className="w-full gap-2 bg-accent hover:bg-accent/90" 
@@ -127,11 +127,11 @@ export default function ToolsPanel({ story, llmConfig, onApplyChanges }: ToolsPa
 
             <TabsContent value="rewrite" className="m-0 space-y-4">
               <div className="space-y-2">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-gray-600">Text to Rewrite</label>
+                <label className="text-[10px] font-bold uppercase tracking-widest text-muted">Text to Rewrite</label>
                 <Textarea 
                   id="rewrite-input"
                   placeholder="Paste text to transform..."
-                  className="text-sm bg-gray-50 border-none h-24"
+                  className="text-sm bg-paper border-none h-24"
                 />
                 <div className="grid grid-cols-2 gap-2">
                   <Button variant="outline" size="sm" className="text-[10px] uppercase" onClick={() => {
@@ -205,7 +205,7 @@ export default function ToolsPanel({ story, llmConfig, onApplyChanges }: ToolsPa
                     )}
                   </div>
                 </div>
-                <div className="p-4 rounded-xl bg-white border border-gray-100 shadow-sm font-serif text-sm leading-relaxed whitespace-pre-wrap">
+                <div className="p-4 rounded-xl bg-secondary border border-border shadow-sm font-serif text-sm leading-relaxed whitespace-pre-wrap">
                   {result}
                 </div>
                 {activeTool !== 'brain' && (

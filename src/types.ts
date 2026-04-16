@@ -23,6 +23,13 @@ export interface StoryState {
   lastModified: number;
 }
 
+export type ThemeMode = 'light' | 'dark' | 'sepia';
+
+export interface ThemeConfig {
+  mode: ThemeMode;
+  primaryColor: string;
+}
+
 export interface BrainstormIdea {
   id: string;
   text: string;

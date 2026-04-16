@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
-import { StoryState, LLMConfig } from './types';
+import { StoryState, LLMConfig, ThemeConfig, ThemeMode } from './types';
 import Editor from './components/Editor';
 import StoryBible from './components/StoryBible';
 import ToolsPanel from './components/ToolsPanel';
@@ -34,7 +34,12 @@ const createNewStory = (): StoryState => ({
 
 const DEFAULT_LLM_CONFIG: LLMConfig = {
   provider: 'gemini',
-  model: 'gemini-3-flash-preview',
+  model: 'gemini-2.0-flash',
+};
+
+const DEFAULT_THEME: ThemeConfig = {
+  mode: 'light',
+  primaryColor: '#6d28d9',
 };
 
 export default function App() {
@@ -60,13 +65,47 @@ export default function App() {
     return saved ? JSON.parse(saved) : DEFAULT_LLM_CONFIG;
   });
 
-  const [leftSidebarOpen, setLeftSidebarOpen] = useState(window.innerWidth > 768);
-  const [rightSidebarOpen, setRightSidebarOpen] = useState(window.innerWidth > 1024);
+  const [theme, setTheme] = useState<ThemeConfig>(() => {
+    const saved = localStorage.getItem('novascribe_theme');
+    return saved ? JSON.parse(saved) : DEFAULT_THEME;
+  });
+
+  const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
+  const [rightSidebarOpen, setRightSidebarOpen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'editor' | 'bible'>('editor');
+  const [isLargeScreen, setIsLargeScreen] = useState(typeof window !== 'undefined' ? window.innerWidth >= 1024 : true);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsLargeScreen(window.innerWidth >= 1024);
+      if (window.innerWidth < 768) {
+        setLeftSidebarOpen(false);
+      }
+      if (window.innerWidth < 1024) {
+        setRightSidebarOpen(false);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    handleResize();
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [lastSaved, setLastSaved] = useState<Date>(new Date());
+  const [isAutoSaving, setIsAutoSaving] = useState(false);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setIsAutoSaving(true);
+      setLastSaved(new Date());
+      // The actual data is already persisted via the stories useEffect,
+      // but we use this interval to provide the requested auto-save behavior/feedback
+      setTimeout(() => setIsAutoSaving(false), 3000);
+    }, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const currentStory = stories.find(s => s.id === currentStoryId) || stories[0];
 
@@ -81,6 +120,51 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('novascribe_llm_config', JSON.stringify(llmConfig));
   }, [llmConfig]);
+
+  useEffect(() => {
+    localStorage.setItem('novascribe_theme', JSON.stringify(theme));
+    
+    // Apply theme to document root
+    const root = document.documentElement;
+    const colors: Record<ThemeMode, Record<string, string>> = {
+      light: {
+        '--bg-paper': '#fdfcfb',
+        '--text-ink': '#1a1a1a',
+        '--text-muted': '#4b5563',
+        '--bg-secondary': '#f3f4f6',
+        '--border-color': '#e5e7eb',
+        '--primary-foreground': '#ffffff',
+      },
+      dark: {
+        '--bg-paper': '#121212',
+        '--text-ink': '#e5e7eb',
+        '--text-muted': '#9ca3af',
+        '--bg-secondary': '#1f1f1f',
+        '--border-color': '#2d2d2d',
+        '--primary-foreground': '#ffffff',
+      },
+      sepia: {
+        '--bg-paper': '#f4ecd8',
+        '--text-ink': '#433422',
+        '--text-muted': '#705c44',
+        '--bg-secondary': '#e8dfc4',
+        '--border-color': '#d3c5a3',
+        '--primary-foreground': '#ffffff',
+      }
+    };
+
+    const currentColors = colors[theme.mode];
+    Object.entries(currentColors).forEach(([key, value]) => {
+      root.style.setProperty(key, value as string);
+    });
+    root.style.setProperty('--primary-accent', theme.primaryColor);
+    
+    if (theme.mode === 'dark') {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+  }, [theme]);
 
   const updateStory = (updates: Partial<StoryState>) => {
     setStories(prev => prev.map(s => 
@@ -116,7 +200,7 @@ export default function App() {
 
   return (
     <TooltipProvider>
-      <div className="flex h-screen w-full bg-paper overflow-hidden text-ink relative">
+      <div className="flex h-[100dvh] w-full bg-paper overflow-hidden text-ink relative">
         {/* Mobile Overlay for Sidebars */}
         <AnimatePresence>
           {(mobileMenuOpen || mobileToolsOpen) && (
@@ -128,7 +212,7 @@ export default function App() {
                 setMobileMenuOpen(false);
                 setMobileToolsOpen(false);
               }}
-              className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 md:hidden"
+              className="fixed inset-0 bg-black/40 z-40 md:hidden"
             />
           )}
         </AnimatePresence>
@@ -137,11 +221,13 @@ export default function App() {
         <motion.aside 
           initial={false}
           animate={{ 
-            width: leftSidebarOpen ? 280 : 64,
-            x: mobileMenuOpen ? 0 : (window.innerWidth < 768 ? -280 : 0)
+            width: (typeof window !== 'undefined' && window.innerWidth < 768) ? 280 : (leftSidebarOpen ? 280 : 64),
+            x: (typeof window !== 'undefined' && window.innerWidth < 768) 
+              ? (mobileMenuOpen ? 0 : -280) 
+              : 0
           }}
           className={`
-            fixed md:relative h-full border-r border-gray-200 bg-white/95 backdrop-blur-md flex flex-col z-50 transition-all
+            fixed md:relative h-full border-r border-border bg-paper flex flex-col z-50 transition-all
             ${mobileMenuOpen ? 'shadow-2xl' : ''}
           `}
         >
@@ -171,8 +257,8 @@ export default function App() {
             </Button>
           </div>
 
-          <ScrollArea className="flex-1">
-            <div className="px-2 space-y-1">
+          <ScrollArea className="flex-1 min-h-0">
+            <div className="px-2 space-y-1 touch-pan-y">
               <SidebarItem 
                 icon={<PenTool size={20} />} 
                 label="Editor" 
@@ -207,7 +293,7 @@ export default function App() {
             {(leftSidebarOpen || mobileMenuOpen) && currentStory && (
               <div className="mt-8 px-4">
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-gray-600 mb-2">Recent Bible Entries</h3>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-muted mb-2">Recent Bible Entries</h3>
                   <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => {
                     setActiveTab('bible');
                     setMobileMenuOpen(false);
@@ -223,7 +309,7 @@ export default function App() {
                         setActiveTab('bible');
                         setMobileMenuOpen(false);
                       }}
-                      className="w-full text-left px-2 py-1.5 text-sm rounded-md hover:bg-gray-100 transition-colors flex items-center gap-2 group"
+                      className="w-full text-left px-2 py-1.5 text-sm rounded-md hover:bg-secondary transition-colors flex items-center gap-2 group"
                     >
                       <div className="w-1.5 h-1.5 rounded-full bg-accent/40 group-hover:bg-accent" />
                       <span className="truncate">{entry.name}</span>
@@ -251,8 +337,8 @@ export default function App() {
         </motion.aside>
 
         {/* Main Content Area */}
-        <main className="flex-1 flex flex-col relative overflow-hidden w-full">
-          <header className="h-14 border-b border-gray-100 flex items-center justify-between px-4 md:px-6 bg-white/30 backdrop-blur-sm z-10">
+        <main className="flex-1 flex flex-col relative overflow-hidden w-full min-h-0">
+          <header className="h-14 border-b border-border flex items-center justify-between px-4 md:px-6 bg-secondary z-10">
             <div className="flex items-center gap-2 md:gap-4 flex-1">
               <Button 
                 variant="ghost" 
@@ -273,15 +359,23 @@ export default function App() {
               </Badge>
             </div>
             <div className="flex items-center gap-1 md:gap-2">
-              <div className="hidden sm:flex items-center gap-2">
-                <Save size={14} className="text-muted" />
-                <span className="text-[10px] text-muted uppercase tracking-widest">Saved</span>
+              <div className="hidden sm:flex items-center gap-2 px-3 py-1 rounded-full bg-secondary/50 border border-border/50">
+                <Save size={12} className={isAutoSaving ? "text-accent animate-pulse" : "text-muted"} />
+                <span className="text-[9px] text-muted uppercase tracking-widest font-medium">
+                  {isAutoSaving ? "Auto-saving..." : `Saved ${lastSaved.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`}
+                </span>
               </div>
               <Button 
                 variant="ghost" 
                 size="icon" 
-                className="md:hidden text-accent"
-                onClick={() => setMobileToolsOpen(true)}
+                className="text-accent"
+                onClick={() => {
+                  if (isLargeScreen) {
+                    setRightSidebarOpen(!rightSidebarOpen);
+                  } else {
+                    setMobileToolsOpen(true);
+                  }
+                }}
               >
                 <Sparkles size={20} />
               </Button>
@@ -301,6 +395,7 @@ export default function App() {
                   <Editor 
                     content={currentStory?.content || ""} 
                     onChange={(content) => updateStory({ content })} 
+                    llmConfig={llmConfig}
                   />
                 </motion.div>
               ) : (
@@ -325,26 +420,27 @@ export default function App() {
         <motion.aside 
           initial={false}
           animate={{ 
-            width: rightSidebarOpen ? 320 : 0,
-            x: mobileToolsOpen ? 0 : (window.innerWidth < 1024 ? 320 : 0)
+            width: isLargeScreen ? (rightSidebarOpen ? 320 : 0) : (mobileToolsOpen ? 320 : 0),
+            x: isLargeScreen ? 0 : (mobileToolsOpen ? 0 : 320)
           }}
           className={`
-            fixed md:relative right-0 h-full border-l border-gray-200 bg-white/95 backdrop-blur-md flex flex-col z-50 transition-all
-            ${mobileToolsOpen ? 'shadow-2xl' : ''}
+            fixed lg:relative right-0 h-full border-l border-border bg-secondary flex flex-col z-50 transition-all
+            ${!isLargeScreen && mobileToolsOpen ? 'shadow-2xl' : ''}
+            ${isLargeScreen && !rightSidebarOpen ? 'border-none' : ''}
           `}
         >
           <Button 
             variant="outline" 
             size="icon" 
             onClick={() => setRightSidebarOpen(!rightSidebarOpen)}
-            className={`hidden md:flex absolute -left-4 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full bg-white shadow-sm z-30 transition-transform ${!rightSidebarOpen ? 'rotate-180' : ''}`}
+            className={`hidden lg:flex absolute -left-4 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full bg-white shadow-sm z-30 transition-transform ${!rightSidebarOpen ? 'rotate-180' : ''}`}
           >
             <ChevronRight size={14} />
           </Button>
 
-          {(rightSidebarOpen || mobileToolsOpen) && (
-            <div className="h-full flex flex-col overflow-hidden w-[320px]">
-              <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+          {(rightSidebarOpen || (!isLargeScreen && mobileToolsOpen)) && (
+            <div className="h-full flex flex-col overflow-hidden w-[320px] min-h-0">
+              <div className="p-4 border-b border-border flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Sparkles size={18} className="text-accent" />
                   <h2 className="font-semibold text-sm uppercase tracking-wider">AI Writing Tools</h2>
@@ -352,7 +448,7 @@ export default function App() {
                 <Button 
                   variant="ghost" 
                   size="icon" 
-                  className="md:hidden"
+                  className="lg:hidden"
                   onClick={() => setMobileToolsOpen(false)}
                 >
                   <X size={18} />
@@ -364,7 +460,7 @@ export default function App() {
                   llmConfig={llmConfig} 
                   onApplyChanges={(newContent) => {
                     updateStory({ content: newContent });
-                    if (window.innerWidth < 1024) setMobileToolsOpen(false);
+                    if (!isLargeScreen) setMobileToolsOpen(false);
                   }}
                 />
               )}
@@ -377,6 +473,8 @@ export default function App() {
           onOpenChange={setSettingsOpen} 
           config={llmConfig} 
           onSave={setLlmConfig} 
+          theme={theme}
+          onThemeSave={setTheme}
         />
 
         <LibraryDialog 
@@ -407,17 +505,9 @@ function SidebarItem({
   collapsed?: boolean;
   onClick?: () => void;
 }) {
-  const content = (
-    <button 
-      onClick={onClick}
-      className={`
-        w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all
-        ${active 
-          ? 'bg-accent/10 text-accent font-bold shadow-sm' 
-          : 'text-gray-600 hover:bg-gray-100 hover:text-ink'}
-      `}
-    >
-      <div className={active ? 'text-accent' : 'text-gray-500'}>
+  const innerContent = (
+    <>
+      <div className={active ? 'text-accent' : 'text-muted'}>
         {icon}
       </div>
       {!collapsed && (
@@ -429,14 +519,24 @@ function SidebarItem({
           {label}
         </motion.span>
       )}
-    </button>
+    </>
   );
+
+  const className = `
+    w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all
+    ${active 
+      ? 'bg-accent/10 text-accent font-bold shadow-sm' 
+      : 'text-muted hover:bg-secondary hover:text-ink'}
+  `;
 
   if (collapsed) {
     return (
       <Tooltip>
-        <TooltipTrigger asChild>
-          {content}
+        <TooltipTrigger 
+          onClick={onClick}
+          className={className}
+        >
+          {innerContent}
         </TooltipTrigger>
         <TooltipContent side="right">
           {label}
@@ -445,5 +545,12 @@ function SidebarItem({
     );
   }
 
-  return content;
+  return (
+    <button 
+      onClick={onClick}
+      className={className}
+    >
+      {innerContent}
+    </button>
+  );
 }

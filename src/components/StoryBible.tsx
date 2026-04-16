@@ -54,18 +54,18 @@ export default function StoryBible({ entries, onUpdate }: StoryBibleProps) {
   };
 
   return (
-    <div className="h-full flex flex-col md:flex-row bg-gray-50/50 relative">
+    <div className="h-full flex flex-col md:flex-row bg-paper relative min-h-0">
       {/* List Panel */}
       <div className={`
-        w-full md:w-80 border-r border-gray-200 flex flex-col bg-white h-full
+        w-full md:w-80 border-r border-border flex flex-col bg-secondary h-full min-h-0
         ${selectedEntryId && window.innerWidth < 768 ? 'hidden' : 'flex'}
       `}>
         <div className="p-4 space-y-4">
           <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted" />
             <Input 
               placeholder="Search bible..." 
-              className="pl-9 bg-gray-50 border-none"
+              className="pl-9 bg-paper border-none"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -86,8 +86,8 @@ export default function StoryBible({ entries, onUpdate }: StoryBibleProps) {
           </div>
         </div>
 
-        <ScrollArea className="flex-1">
-          <div className="p-2 space-y-1">
+        <ScrollArea className="flex-1 min-h-0">
+          <div className="p-2 space-y-1 touch-pan-y">
             {filteredEntries.map(entry => (
               <button
                 key={entry.id}
@@ -96,7 +96,7 @@ export default function StoryBible({ entries, onUpdate }: StoryBibleProps) {
                   w-full text-left p-3 rounded-lg transition-all group
                   ${selectedEntryId === entry.id 
                     ? 'bg-accent/10 border-accent/20 border' 
-                    : 'hover:bg-gray-50 border-transparent border'}
+                    : 'hover:bg-paper border-transparent border'}
                 `}
               >
                 <div className="flex items-center justify-between mb-1">
@@ -204,8 +204,8 @@ export default function StoryBible({ entries, onUpdate }: StoryBibleProps) {
             </CardContent>
           </Card>
         ) : (
-          <div className="h-full flex flex-col items-center justify-center text-gray-500 space-y-4">
-            <div className="p-6 rounded-full bg-gray-100">
+          <div className="h-full flex flex-col items-center justify-center text-muted space-y-4">
+            <div className="p-6 rounded-full bg-secondary">
               <BookOpen size={48} strokeWidth={1} />
             </div>
             <div className="text-center">

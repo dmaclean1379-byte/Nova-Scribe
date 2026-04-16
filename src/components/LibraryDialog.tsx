@@ -77,7 +77,7 @@ export default function LibraryDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] w-[95vw] flex flex-col p-4 md:p-6">
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] w-[95vw] flex flex-col p-4 md:p-6 bg-paper shadow-2xl border-border">
         <DialogHeader>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
@@ -105,7 +105,7 @@ export default function LibraryDialog({
           </div>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 mt-4 pr-0 md:pr-4">
+        <ScrollArea className="flex-1 mt-4 pr-0 md:pr-4 touch-pan-y">
           <div className="space-y-3">
             {stories.sort((a, b) => b.lastModified - a.lastModified).map(story => (
               <div 
@@ -114,7 +114,7 @@ export default function LibraryDialog({
                   p-3 md:p-4 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between group gap-3
                   ${story.id === currentStoryId 
                     ? 'bg-accent/5 border-accent/20 ring-1 ring-accent/20' 
-                    : 'bg-white border-gray-100 hover:border-gray-200'}
+                    : 'bg-secondary border-border hover:border-accent/20'}
                 `}
               >
                 <div 
