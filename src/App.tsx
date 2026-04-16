@@ -18,6 +18,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
 import { StoryState, LLMConfig, ThemeConfig, ThemeMode } from './types';
+import { storage } from './lib/storage';
 import Editor from './components/Editor';
 import StoryBible from './components/StoryBible';
 import ToolsPanel from './components/ToolsPanel';
@@ -43,32 +44,40 @@ const DEFAULT_THEME: ThemeConfig = {
 };
 
 export default function App() {
-  const [stories, setStories] = useState<StoryState[]>(() => {
-    const saved = localStorage.getItem('novascribe_stories');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error("Failed to parse stories", e);
+  const [stories, setStories] = useState<StoryState[]>([]);
+  const [currentStoryId, setCurrentStoryId] = useState<string>("");
+  const [llmConfig, setLlmConfig] = useState<LLMConfig>(DEFAULT_LLM_CONFIG);
+  const [theme, setTheme] = useState<ThemeConfig>(DEFAULT_THEME);
+  const [isInitializing, setIsInitializing] = useState(true);
+
+  // Initial load from IndexedDB
+  useEffect(() => {
+    const initStorage = async () => {
+      // First, try to migrate from localStorage if this is a first-time use of IDB
+      const migrated = await storage.migrateFromLocalStorage();
+      
+      const savedStories = await storage.getAllStories();
+      const savedCurrentId = await storage.getConfig<string>('current_story_id');
+      const savedLlmConfig = await storage.getConfig<LLMConfig>('llm_config');
+      const savedTheme = await storage.getConfig<ThemeConfig>('theme_config');
+
+      if (savedStories.length > 0) {
+        setStories(savedStories);
+        setCurrentStoryId(savedCurrentId || savedStories[0].id);
+      } else {
+        const initialStory = createNewStory();
+        setStories([initialStory]);
+        setCurrentStoryId(initialStory.id);
       }
-    }
-    return [createNewStory()];
-  });
 
-  const [currentStoryId, setCurrentStoryId] = useState<string>(() => {
-    const saved = localStorage.getItem('novascribe_current_id');
-    return saved || (stories.length > 0 ? stories[0].id : "");
-  });
+      if (savedLlmConfig) setLlmConfig(savedLlmConfig);
+      if (savedTheme) setTheme(savedTheme);
+      
+      setIsInitializing(false);
+    };
 
-  const [llmConfig, setLlmConfig] = useState<LLMConfig>(() => {
-    const saved = localStorage.getItem('novascribe_llm_config');
-    return saved ? JSON.parse(saved) : DEFAULT_LLM_CONFIG;
-  });
-
-  const [theme, setTheme] = useState<ThemeConfig>(() => {
-    const saved = localStorage.getItem('novascribe_theme');
-    return saved ? JSON.parse(saved) : DEFAULT_THEME;
-  });
+    initStorage();
+  }, []);
 
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
   const [rightSidebarOpen, setRightSidebarOpen] = useState(true);
@@ -110,19 +119,23 @@ export default function App() {
   const currentStory = stories.find(s => s.id === currentStoryId) || stories[0];
 
   useEffect(() => {
-    localStorage.setItem('novascribe_stories', JSON.stringify(stories));
-  }, [stories]);
+    if (isInitializing) return;
+    storage.saveAllStories(stories);
+  }, [stories, isInitializing]);
 
   useEffect(() => {
-    localStorage.setItem('novascribe_current_id', currentStoryId);
-  }, [currentStoryId]);
+    if (isInitializing) return;
+    storage.saveConfig('current_story_id', currentStoryId);
+  }, [currentStoryId, isInitializing]);
 
   useEffect(() => {
-    localStorage.setItem('novascribe_llm_config', JSON.stringify(llmConfig));
-  }, [llmConfig]);
+    if (isInitializing) return;
+    storage.saveConfig('llm_config', llmConfig);
+  }, [llmConfig, isInitializing]);
 
   useEffect(() => {
-    localStorage.setItem('novascribe_theme', JSON.stringify(theme));
+    if (isInitializing) return;
+    storage.saveConfig('theme_config', theme);
     
     // Apply theme to document root
     const root = document.documentElement;
@@ -197,6 +210,22 @@ export default function App() {
     setCurrentStoryId(newStory.id);
     setLibraryOpen(false);
   };
+
+  if (isInitializing) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-paper text-accent">
+        <div className="flex flex-col items-center gap-4">
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+          >
+            <Sparkles size={48} />
+          </motion.div>
+          <p className="font-serif italic text-lg opacity-80">Opening your archives...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <TooltipProvider>
