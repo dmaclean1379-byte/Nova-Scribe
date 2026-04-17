@@ -35,6 +35,18 @@ async function startServer() {
       description TEXT,
       FOREIGN KEY(story_id) REFERENCES stories(id) ON DELETE CASCADE
     );
+    CREATE TABLE IF NOT EXISTS characters (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      tags TEXT
+    );
+    CREATE TABLE IF NOT EXISTS locations (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      tags TEXT
+    );
   `);
 
   const aiService = new AIProviderService(db);
@@ -109,8 +121,18 @@ async function startServer() {
           // Update bible entries
           db.prepare("DELETE FROM bible_entries WHERE story_id = ?").run(localStory.id);
           const insertBible = db.prepare("INSERT INTO bible_entries (id, story_id, name, type, description) VALUES (?, ?, ?, ?, ?)");
+          const insertChar = db.prepare("INSERT OR REPLACE INTO characters (id, name, description) VALUES (?, ?, ?)");
+          const insertLoc = db.prepare("INSERT OR REPLACE INTO locations (id, name, description) VALUES (?, ?, ?)");
+
           for (const entry of localStory.bible) {
             insertBible.run(entry.id, localStory.id, entry.name, entry.type, entry.description);
+            
+            // Mirror to new characters/locations tables for the Python engine
+            if (entry.type?.toLowerCase() === 'character') {
+              insertChar.run(entry.id, entry.name, entry.description);
+            } else if (entry.type?.toLowerCase() === 'location') {
+              insertLoc.run(entry.id, entry.name, entry.description);
+            }
           }
         }
       }
@@ -141,11 +163,11 @@ async function startServer() {
     res.json({ stories: result });
   });
 
-  // Streaming AI Generation Endpoint
+  // Streaming AI Generation Endpoint (Proxied to Python FastAPI)
   app.get("/api/generate", async (req, res) => {
-    const { provider, model, prompt, storyId, systemPrompt } = req.query as any;
+    const { provider, model, prompt } = req.query as any;
 
-    if (!provider || !prompt || !storyId) {
+    if (!provider || !prompt) {
       return res.status(400).json({ error: "Missing required parameters" });
     }
 
@@ -153,20 +175,29 @@ async function startServer() {
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
 
-    const tokenGenerator = aiService.generateStream(
-      provider,
-      model || "gpt-3.5-turbo",
-      prompt,
-      systemPrompt || "You are a creative writing assistant.",
-      storyId
-    );
+    try {
+      const params = new URLSearchParams({ provider, model, prompt });
+      const pythonResponse = await fetch(`http://localhost:8000/generate?${params.toString()}`);
+      
+      if (!pythonResponse.ok) {
+        throw new Error(`Python Backend Error: ${pythonResponse.statusText}`);
+      }
 
-    for await (const token of tokenGenerator) {
-      res.write(`data: ${JSON.stringify({ token })}\n\n`);
+      const reader = pythonResponse.body?.getReader();
+      if (!reader) throw new Error("Could not read stream from Python backend");
+
+      const decoder = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        res.write(decoder.decode(value));
+      }
+    } catch (err: any) {
+      res.write(`data: ${JSON.stringify({ token: `Error bridging to AI Engine: ${err.message}` })}\n\n`);
+    } finally {
+      res.write("data: [DONE]\n\n");
+      res.end();
     }
-
-    res.write("data: [DONE]\n\n");
-    res.end();
   });
 
   // 404 handler for API routes
