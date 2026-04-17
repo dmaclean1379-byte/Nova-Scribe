@@ -17,7 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { StoryState, LLMConfig } from '../types';
-import { callLLM } from '../services/llmService';
+import { callLLM, streamLLM } from '../services/llmService';
 
 interface ToolsPanelProps {
   story: StoryState;
@@ -33,55 +33,33 @@ export default function ToolsPanel({ story, llmConfig, onApplyChanges }: ToolsPa
   const handleAction = async (action: string, params: any = {}) => {
     setLoading(true);
     setResult('');
+    let accumulatedResult = '';
     
     try {
       let prompt = "";
-      const bibleContext = story.bible.map(e => `${e.name} (${e.type}): ${e.description}`).join('\n');
+      const systemPrompt = "You are a creative writing assistant.";
       
       switch (action) {
         case 'describe':
-          prompt = `You are a creative writing assistant. 
-          Context from Story Bible:
-          ${bibleContext}
-          
-          Current story content:
-          ${story.content.slice(-1000)}
-          
-          Task: Provide a rich, sensory description for the following: "${params.text}". 
-          Focus on sight, sound, smell, touch, and taste where appropriate. Keep it evocative and literary.`;
+          prompt = `Provide a rich, sensory description for the following: "${params.text}". Focus on sight, sound, smell, touch, and taste. Current story context: ${story.content.slice(-500)}`;
           break;
         case 'rewrite':
-          prompt = `You are a creative writing assistant.
-          Task: Rewrite the following text to be ${params.tone}.
-          
-          Text: "${params.text}"
-          
-          Provide only the rewritten text.`;
+          prompt = `Rewrite the following text to be ${params.tone}. Text: "${params.text}"`;
           break;
         case 'expand':
-          prompt = `You are a creative writing assistant.
-          Context from Story Bible:
-          ${bibleContext}
-          
-          Current story content:
-          ${story.content.slice(-2000)}
-          
-          Task: Continue the story from where it left off. Maintain the tone and style. Provide about 200-300 words.`;
+          prompt = `Continue the story from where it left off. Current content: ${story.content.slice(-1000)}`;
           break;
         case 'brainstorm':
-          prompt = `You are a creative writing assistant.
-          Context from Story Bible:
-          ${bibleContext}
-          
-          Current story content:
-          ${story.content.slice(-1000)}
-          
-          Task: Brainstorm 5 unique and interesting plot twists or next steps for this story. Be creative and unexpected.`;
+          prompt = `Brainstorm 5 unique plot twists or next steps for this story. Current content: ${story.content.slice(-500)}`;
           break;
       }
 
-      const response = await callLLM(prompt, llmConfig);
-      setResult(response);
+      const stream = streamLLM(prompt, llmConfig, story.id, systemPrompt);
+      
+      for await (const token of stream) {
+        accumulatedResult += token;
+        setResult(accumulatedResult);
+      }
     } catch (error: any) {
       setResult(`Error: ${error.message}`);
     } finally {

@@ -47,33 +47,83 @@ const THEME_COLORS = [
 ];
 
 export default function SettingsDialog({ open, onOpenChange, config, onSave, theme, onThemeSave }: SettingsDialogProps) {
-  const [tempConfig, setTempConfig] = useState<LLMConfig>(config);
+  const [tempConfig, setTempConfig] = useState<LLMConfig>(() => {
+    // Ensure nested objects exist
+    return {
+      activeProvider: config.activeProvider || 'gemini',
+      keys: config.keys || {},
+      baseUrls: config.baseUrls || {},
+      models: config.models || {},
+      // Backwards compatibility
+      ...(config.provider ? { activeProvider: config.provider } : {}),
+      ...(config.apiKey ? { keys: { ...config.keys, [config.provider || 'gemini']: config.apiKey } } : {}),
+      ...(config.model ? { models: { ...config.models, [config.provider || 'gemini']: config.model } } : {})
+    };
+  });
   const [tempTheme, setTempTheme] = useState<ThemeConfig>(theme);
   const [activeTab, setActiveTab] = useState<'ai' | 'appearance'>('ai');
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<'success' | 'error' | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [testMessage, setTestMessage] = useState<string | null>(null);
 
   const handleTest = async () => {
     setTesting(true);
     setTestResult(null);
-    setErrorMessage(null);
+    setTestMessage(null);
     try {
-      await callLLM("Hello, are you working?", tempConfig);
-      setTestResult('success');
+      const response = await fetch('/api/test-provider', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: tempConfig.activeProvider,
+          apiKey: tempConfig.keys[tempConfig.activeProvider],
+          baseUrl: tempConfig.baseUrls[tempConfig.activeProvider],
+          model: tempConfig.models[tempConfig.activeProvider]
+        })
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setTestResult('success');
+        setTestMessage(data.message);
+      } else {
+        throw new Error(data.message || "Connection failed");
+      }
     } catch (error: any) {
       console.error(error);
       setTestResult('error');
-      setErrorMessage(error.message || "An unknown error occurred");
+      setTestMessage(error.message || "An unknown error occurred");
     } finally {
       setTesting(false);
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    // 1. Update Frontend State
     onSave(tempConfig);
     onThemeSave(tempTheme);
+    
+    // 2. Persist to Backend config.json (Simulating Electron)
+    try {
+      await fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(tempConfig)
+      });
+    } catch (err) {
+      console.error("Failed to save to config.json", err);
+    }
+    
     onOpenChange(false);
+  };
+
+  const updateProviderConfig = (provider: LLMProvider, field: 'keys' | 'baseUrls' | 'models', value: string) => {
+    setTempConfig(prev => ({
+      ...prev,
+      [field]: {
+        ...prev[field],
+        [provider]: value
+      }
+    }));
   };
 
   return (
@@ -105,10 +155,10 @@ export default function SettingsDialog({ open, onOpenChange, config, onSave, the
           {activeTab === 'ai' ? (
             <div className="grid gap-4 md:gap-6">
               <div className="grid gap-2">
-                <label className="text-[10px] md:text-xs font-bold uppercase tracking-wider text-gray-600">Provider</label>
+                <label className="text-[10px] md:text-xs font-bold uppercase tracking-wider text-gray-600">Active Provider</label>
                 <Select 
-                  value={tempConfig.provider} 
-                  onValueChange={(val: LLMProvider) => setTempConfig({ ...tempConfig, provider: val, model: val === 'gemini' ? 'gemini-2.0-flash' : '' })}
+                  value={tempConfig.activeProvider} 
+                  onValueChange={(val: LLMProvider) => setTempConfig({ ...tempConfig, activeProvider: val })}
                 >
                   <SelectTrigger className="h-9">
                     <SelectValue placeholder="Select provider" />
@@ -130,40 +180,35 @@ export default function SettingsDialog({ open, onOpenChange, config, onSave, the
                 <label className="text-[10px] md:text-xs font-bold uppercase tracking-wider text-gray-600">Model Name</label>
                 <Input 
                   className="h-9"
-                  placeholder={tempConfig.provider === 'gemini' ? 'gemini-2.0-flash' : 'e.g. gpt-4o, llama3, etc.'}
-                  value={tempConfig.model}
-                  onChange={(e) => setTempConfig({ ...tempConfig, model: e.target.value })}
+                  placeholder={tempConfig.activeProvider === 'gemini' ? 'gemini-2.0-flash' : 'e.g. gpt-4o, llama3, etc.'}
+                  value={tempConfig.models[tempConfig.activeProvider] || ''}
+                  onChange={(e) => updateProviderConfig(tempConfig.activeProvider, 'models', e.target.value)}
                 />
               </div>
 
-              {tempConfig.provider !== 'gemini' && (
+              {tempConfig.activeProvider !== 'gemini' && (
                 <div className="grid gap-2">
                   <label className="text-[10px] md:text-xs font-bold uppercase tracking-wider text-gray-600">API Key</label>
                   <Input 
                     className="h-9"
                     type="password"
                     placeholder="Enter your API key"
-                    value={tempConfig.apiKey || ''}
-                    onChange={(e) => setTempConfig({ ...tempConfig, apiKey: e.target.value })}
+                    value={tempConfig.keys[tempConfig.activeProvider] || ''}
+                    onChange={(e) => updateProviderConfig(tempConfig.activeProvider, 'keys', e.target.value)}
                   />
-                  <p className="text-[9px] text-muted italic">Keys are stored locally in your browser.</p>
+                  <p className="text-[9px] text-muted italic">Stored in config.json on the server.</p>
                 </div>
               )}
 
-              {(tempConfig.provider === 'local' || tempConfig.provider === 'custom') && (
+              {(tempConfig.activeProvider === 'local' || tempConfig.activeProvider === 'custom') && (
                 <div className="grid gap-2">
                   <label className="text-[10px] md:text-xs font-bold uppercase tracking-wider text-gray-600">Base URL</label>
                   <Input 
                     className="h-9"
-                    placeholder={tempConfig.provider === 'local' ? 'http://localhost:11434/v1' : 'https://api.your-provider.com/v1'}
-                    value={tempConfig.baseUrl || ''}
-                    onChange={(e) => setTempConfig({ ...tempConfig, baseUrl: e.target.value })}
+                    placeholder={tempConfig.activeProvider === 'local' ? 'http://localhost:11434/v1' : 'https://api.your-provider.com/v1'}
+                    value={tempConfig.baseUrls[tempConfig.activeProvider] || ''}
+                    onChange={(e) => updateProviderConfig(tempConfig.activeProvider, 'baseUrls', e.target.value)}
                   />
-                  {tempConfig.provider === 'local' && (
-                    <p className="text-[9px] text-amber-600 italic leading-tight">
-                      Note: Browsers block HTTPS to HTTP requests. To use local AI, you may need to use a proxy or disable "Mixed Content" blocking in your browser.
-                    </p>
-                  )}
                 </div>
               )}
 
@@ -175,13 +220,13 @@ export default function SettingsDialog({ open, onOpenChange, config, onSave, the
                   onClick={handleTest}
                   disabled={testing}
                 >
-                  {testing ? <Loader2 className="animate-spin" size={16} /> : "Test Connection"}
+                  {testing ? <Loader2 className="animate-spin" size={16} /> : "Test " + tempConfig.activeProvider + " Connection"}
                   {testResult === 'success' && <CheckCircle2 size={16} className="text-green-500" />}
                   {testResult === 'error' && <XCircle size={16} className="text-red-500" />}
                 </Button>
-                {errorMessage && (
-                  <p className="text-[10px] text-red-500 bg-red-50 p-2 rounded border border-red-100 animate-in fade-in slide-in-from-top-1">
-                    {errorMessage}
+                {testMessage && (
+                  <p className={`text-[10px] p-2 rounded border animate-in fade-in slide-in-from-top-1 ${testResult === 'success' ? 'text-green-600 bg-green-50 border-green-100' : 'text-red-500 bg-red-50 border-red-100'}`}>
+                    {testMessage}
                   </p>
                 )}
               </div>

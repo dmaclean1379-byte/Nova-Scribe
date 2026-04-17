@@ -1,10 +1,15 @@
 export type LLMProvider = 'gemini' | 'openrouter' | 'nvidia' | 'local' | 'custom';
 
 export interface LLMConfig {
-  provider: LLMProvider;
+  activeProvider: LLMProvider;
+  keys: Partial<Record<LLMProvider, string>>;
+  baseUrls: Partial<Record<LLMProvider, string>>;
+  models: Partial<Record<LLMProvider, string>>;
+  // Legacy fields for compatibility during migration
+  provider?: LLMProvider;
   apiKey?: string;
   baseUrl?: string;
-  model: string;
+  model?: string;
 }
 
 export interface StoryBibleEntry {

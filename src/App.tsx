@@ -37,8 +37,16 @@ const createNewStory = (): StoryState => ({
 });
 
 const DEFAULT_LLM_CONFIG: LLMConfig = {
-  provider: 'gemini',
-  model: 'gemini-2.0-flash',
+  activeProvider: 'gemini',
+  keys: {},
+  baseUrls: {
+    local: "http://localhost:11434/v1",
+    openrouter: "https://openrouter.ai/api/v1",
+    nvidia: "https://integrate.api.nvidia.com/v1"
+  },
+  models: {
+    gemini: 'gemini-2.0-flash'
+  }
 };
 
 const DEFAULT_THEME: ThemeConfig = {
@@ -70,6 +78,17 @@ export default function App() {
       const savedLlmConfig = await storage.getConfig<LLMConfig>('llm_config');
       const savedTheme = await storage.getConfig<ThemeConfig>('theme_config');
 
+      // Also try to load from config.json (Electron style)
+      let cloudConfig = null;
+      try {
+        const response = await fetch('/api/config');
+        if (response.ok) {
+          cloudConfig = await response.json();
+        }
+      } catch (err) {
+        console.warn("Could not load config.json", err);
+      }
+
       let currentStories = savedStories;
       if (savedStories.length === 0) {
         const initialStory = createNewStory();
@@ -79,7 +98,12 @@ export default function App() {
       setStories(currentStories);
       setCurrentStoryId(savedCurrentId || currentStories[0].id);
 
-      if (savedLlmConfig) setLlmConfig(savedLlmConfig);
+      if (cloudConfig && Object.keys(cloudConfig).length > 0) {
+        setLlmConfig(cloudConfig);
+      } else if (savedLlmConfig) {
+        setLlmConfig(savedLlmConfig);
+      }
+      
       if (savedTheme) setTheme(savedTheme);
       
       setIsInitializing(false);
@@ -456,7 +480,7 @@ export default function App() {
                 </div>
               </div>
               <Tooltip>
-                <TooltipTrigger asChild>
+                <TooltipTrigger render={
                   <Button 
                     variant="ghost" 
                     size="icon" 
@@ -469,7 +493,7 @@ export default function App() {
                   >
                     <Save size={18} />
                   </Button>
-                </TooltipTrigger>
+                } />
                 <TooltipContent>Save Project</TooltipContent>
               </Tooltip>
               <Button 

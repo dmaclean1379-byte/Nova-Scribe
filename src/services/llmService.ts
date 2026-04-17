@@ -1,21 +1,79 @@
 import { GoogleGenAI } from "@google/genai";
 import { LLMConfig } from "../types";
 
+export async function* streamLLM(
+  prompt: string, 
+  config: LLMConfig, 
+  storyId: string,
+  systemPrompt?: string
+): AsyncGenerator<string> {
+  const provider = config.activeProvider;
+  const model = config.models[provider] || (provider === 'gemini' ? 'gemini-2.0-flash' : '');
+  
+  const params = new URLSearchParams({
+    provider: provider,
+    model: model,
+    prompt: prompt,
+    storyId: storyId,
+    systemPrompt: systemPrompt || "You are a creative writing assistant."
+  });
+
+  const response = await fetch(`/api/generate?${params.toString()}`);
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: "Failed to connect to AI service" }));
+    throw new Error(error.error || "Generation failed");
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error("Could not read response stream");
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n\n");
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      if (line.startsWith("data: ")) {
+        const data = line.slice(6);
+        if (data === "[DONE]") return;
+        try {
+          const { token } = JSON.parse(data);
+          if (token) yield token;
+        } catch (e) {
+          console.error("Error parsing stream chunk", e);
+        }
+      }
+    }
+  }
+}
+
 export async function callLLM(prompt: string, config: LLMConfig): Promise<string> {
-  switch (config.provider) {
+  const provider = config.activeProvider;
+  const model = config.models[provider] || '';
+  const apiKey = config.keys[provider];
+  const baseUrl = config.baseUrls[provider];
+
+  switch (provider) {
     case 'gemini':
-      return callGemini(prompt, config);
+      return callGemini(prompt, { ...config, model, apiKey } as any);
     case 'openrouter':
-      return callOpenAICompatible(prompt, config, "https://openrouter.ai/api/v1");
+      return callOpenAICompatible(prompt, { ...config, model, apiKey, baseUrl } as any, "https://openrouter.ai/api/v1");
     case 'nvidia':
-      return callOpenAICompatible(prompt, config, "https://integrate.api.nvidia.com/v1");
+      return callOpenAICompatible(prompt, { ...config, model, apiKey, baseUrl } as any, "https://integrate.api.nvidia.com/v1");
     case 'local':
-      return callOpenAICompatible(prompt, config, config.baseUrl || "http://localhost:11434/v1");
+      return callOpenAICompatible(prompt, { ...config, model, apiKey, baseUrl } as any, baseUrl || "http://localhost:11434/v1");
     case 'custom':
-      if (!config.baseUrl) throw new Error("Base URL is required for custom provider");
-      return callOpenAICompatible(prompt, config, config.baseUrl);
+      if (!baseUrl) throw new Error("Base URL is required for custom provider");
+      return callOpenAICompatible(prompt, { ...config, model, apiKey, baseUrl } as any, baseUrl);
     default:
-      throw new Error(`Unsupported provider: ${config.provider}`);
+      throw new Error(`Unsupported provider: ${provider}`);
   }
 }
 
