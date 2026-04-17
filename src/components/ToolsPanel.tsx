@@ -9,7 +9,8 @@ import {
   Copy,
   BrainCircuit,
   Eye,
-  Zap
+  Zap,
+  Map
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -49,8 +50,16 @@ export default function ToolsPanel({ story, llmConfig, onApplyChanges }: ToolsPa
         case 'expand':
           prompt = `Continue the story from where it left off. Current content: ${story.content.slice(-1000)}`;
           break;
-        case 'brainstorm':
-          prompt = `Brainstorm 5 unique plot twists or next steps for this story. Current content: ${story.content.slice(-500)}`;
+        case 'plot':
+          if (params.type === 'twist') {
+            prompt = `Brainstorm 3 dramatic plot twists for this story that would surprise the reader. Current content: ${story.content.slice(-800)}`;
+          } else if (params.type === 'conflict') {
+            prompt = `Identify a new conflict or obstacle for the characters based on the current situation. Current content: ${story.content.slice(-800)}`;
+          } else if (params.type === 'ending') {
+            prompt = `Suggest 3 potential directions for how this story or scene could end. Current content: ${story.content.slice(-800)}`;
+          } else {
+            prompt = `Brainstorm 5 unique plot ideas or next steps for this story. Current content: ${story.content.slice(-800)}`;
+          }
           break;
       }
 
@@ -75,7 +84,7 @@ export default function ToolsPanel({ story, llmConfig, onApplyChanges }: ToolsPa
             <TabsTrigger value="describe" className="text-[9px] md:text-[10px] uppercase tracking-wider font-bold text-muted data-[state=active]:text-accent">Describe</TabsTrigger>
             <TabsTrigger value="rewrite" className="text-[9px] md:text-[10px] uppercase tracking-wider font-bold text-muted data-[state=active]:text-accent">Rewrite</TabsTrigger>
             <TabsTrigger value="expand" className="text-[9px] md:text-[10px] uppercase tracking-wider font-bold text-muted data-[state=active]:text-accent">Expand</TabsTrigger>
-            <TabsTrigger value="brain" className="text-[9px] md:text-[10px] uppercase tracking-wider font-bold text-muted data-[state=active]:text-accent">Ideas</TabsTrigger>
+            <TabsTrigger value="plot" className="text-[9px] md:text-[10px] uppercase tracking-wider font-bold text-muted data-[state=active]:text-accent">Plot</TabsTrigger>
           </TabsList>
         </div>
 
@@ -148,17 +157,53 @@ export default function ToolsPanel({ story, llmConfig, onApplyChanges }: ToolsPa
               </div>
             </TabsContent>
 
-            <TabsContent value="brain" className="m-0 space-y-4">
+            <TabsContent value="plot" className="m-0 space-y-4">
               <div className="space-y-4">
-                <Button 
-                  variant="outline"
-                  className="w-full gap-2 border-accent/20 text-accent hover:bg-accent/5"
-                  disabled={loading}
-                  onClick={() => handleAction('brainstorm')}
-                >
-                  {loading ? <Loader2 className="animate-spin" size={16} /> : <BrainCircuit size={16} />}
-                  Brainstorm Plot Ideas
-                </Button>
+                <div className="p-3 rounded-lg bg-secondary/50 border border-border">
+                  <p className="text-[10px] text-muted leading-relaxed uppercase font-bold tracking-tight mb-3">Plot Generation</p>
+                  <div className="grid gap-2">
+                    <Button 
+                      variant="outline"
+                      size="sm"
+                      className="w-full justify-start gap-2 h-9 text-[11px] font-medium"
+                      disabled={loading}
+                      onClick={() => handleAction('plot', { type: 'general' })}
+                    >
+                      <BrainCircuit size={14} className="text-accent" />
+                      Brainstorm Ideas
+                    </Button>
+                    <Button 
+                      variant="outline"
+                      size="sm"
+                      className="w-full justify-start gap-2 h-9 text-[11px] font-medium"
+                      disabled={loading}
+                      onClick={() => handleAction('plot', { type: 'twist' })}
+                    >
+                      <RefreshCw size={14} className="text-orange-500" />
+                      Unexpected Twist
+                    </Button>
+                    <Button 
+                      variant="outline"
+                      size="sm"
+                      className="w-full justify-start gap-2 h-9 text-[11px] font-medium"
+                      disabled={loading}
+                      onClick={() => handleAction('plot', { type: 'conflict' })}
+                    >
+                      <Zap size={14} className="text-yellow-500" />
+                      Introduce Conflict
+                    </Button>
+                    <Button 
+                      variant="outline"
+                      size="sm"
+                      className="w-full justify-start gap-2 h-9 text-[11px] font-medium"
+                      disabled={loading}
+                      onClick={() => handleAction('plot', { type: 'ending' })}
+                    >
+                      <ArrowRight size={14} className="text-blue-500" />
+                      Scene Directions
+                    </Button>
+                  </div>
+                </div>
               </div>
             </TabsContent>
 
@@ -173,7 +218,7 @@ export default function ToolsPanel({ story, llmConfig, onApplyChanges }: ToolsPa
                     }}>
                       <Copy size={14} />
                     </Button>
-                    {activeTool !== 'brain' && (
+                    {activeTool !== 'plot' && (
                       <Button variant="ghost" size="icon" className="h-7 w-7 text-green-600" onClick={() => {
                         onApplyChanges(story.content + "\n\n" + result);
                         setResult('');
@@ -186,7 +231,7 @@ export default function ToolsPanel({ story, llmConfig, onApplyChanges }: ToolsPa
                 <div className="p-4 rounded-xl bg-secondary border border-border shadow-sm font-serif text-sm leading-relaxed whitespace-pre-wrap">
                   {result}
                 </div>
-                {activeTool !== 'brain' && (
+                {activeTool !== 'plot' && (
                   <p className="text-[10px] text-muted italic text-center">
                     Click the checkmark to append to your story.
                   </p>

@@ -3,4 +3,4 @@ uvicorn
 openai
 python-dotenv
 requests
-better-sqlite3-python
+sqlalchemy

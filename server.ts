@@ -17,9 +17,13 @@ async function startServer() {
   app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
   // Real SQLite Database for VPS-style persistence
-  const db = new Database("database.sqlite");
+  // Shared with Python Smart Engine in ./data
+  const DB_DIR = path.join(process.cwd(), "data");
+  if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR);
   
-  // Initialize tables
+  const db = new Database(path.join(DB_DIR, "database.sqlite"));
+  
+  // Initialize tables (Shared schema)
   db.exec(`
     CREATE TABLE IF NOT EXISTS stories (
       id TEXT PRIMARY KEY,
@@ -36,16 +40,22 @@ async function startServer() {
       FOREIGN KEY(story_id) REFERENCES stories(id) ON DELETE CASCADE
     );
     CREATE TABLE IF NOT EXISTS characters (
-      id TEXT PRIMARY KEY,
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
       description TEXT,
-      tags TEXT
+      metadata_json TEXT
     );
     CREATE TABLE IF NOT EXISTS locations (
-      id TEXT PRIMARY KEY,
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
       description TEXT,
-      tags TEXT
+      metadata_json TEXT
+    );
+    CREATE TABLE IF NOT EXISTS chapters (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      description TEXT,
+      metadata_json TEXT
     );
   `);
 
@@ -121,17 +131,18 @@ async function startServer() {
           // Update bible entries
           db.prepare("DELETE FROM bible_entries WHERE story_id = ?").run(localStory.id);
           const insertBible = db.prepare("INSERT INTO bible_entries (id, story_id, name, type, description) VALUES (?, ?, ?, ?, ?)");
-          const insertChar = db.prepare("INSERT OR REPLACE INTO characters (id, name, description) VALUES (?, ?, ?)");
-          const insertLoc = db.prepare("INSERT OR REPLACE INTO locations (id, name, description) VALUES (?, ?, ?)");
+          const insertChar = db.prepare("INSERT OR REPLACE INTO characters (name, description, metadata_json) VALUES (?, ?, ?)");
+          const insertLoc = db.prepare("INSERT OR REPLACE INTO locations (name, description, metadata_json) VALUES (?, ?, ?)");
 
           for (const entry of localStory.bible) {
             insertBible.run(entry.id, localStory.id, entry.name, entry.type, entry.description);
             
-            // Mirror to new characters/locations tables for the Python engine
+            // Mirror to new SQLAlchemy tables for the Python engine
+            const metadata = JSON.stringify(entry.metadata || {});
             if (entry.type?.toLowerCase() === 'character') {
-              insertChar.run(entry.id, entry.name, entry.description);
+              insertChar.run(entry.name, entry.description, metadata);
             } else if (entry.type?.toLowerCase() === 'location') {
-              insertLoc.run(entry.id, entry.name, entry.description);
+              insertLoc.run(entry.name, entry.description, metadata);
             }
           }
         }
@@ -163,7 +174,7 @@ async function startServer() {
     res.json({ stories: result });
   });
 
-  // Streaming AI Generation Endpoint (Proxied to Python FastAPI)
+  // Streaming AI Generation Endpoint (Proxied to Python SQLAlchemy/FastAPI Engine)
   app.get("/api/generate", async (req, res) => {
     const { provider, model, prompt } = req.query as any;
 
@@ -176,8 +187,13 @@ async function startServer() {
     res.setHeader("Connection", "keep-alive");
 
     try {
-      const params = new URLSearchParams({ provider, model, prompt });
-      const pythonResponse = await fetch(`http://localhost:8000/generate?${params.toString()}`);
+      const pythonResponse = await fetch(`http://localhost:8000/v1/ai/generate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ provider, model, prompt })
+      });
       
       if (!pythonResponse.ok) {
         throw new Error(`Python Backend Error: ${pythonResponse.statusText}`);
