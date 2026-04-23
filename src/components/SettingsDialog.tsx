@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { 
   Dialog, 
   DialogContent, 
@@ -12,13 +12,15 @@ import { Input } from "@/components/ui/input";
 import { 
   Select, 
   SelectContent, 
+  SelectGroup, 
   SelectItem, 
+  SelectLabel, 
   SelectTrigger, 
   SelectValue 
 } from "@/components/ui/select";
 import { LLMConfig, LLMProvider, ThemeConfig, ThemeMode } from '../types';
 import { callLLM } from '../services/llmService';
-import { Loader2, CheckCircle2, XCircle, Palette, Monitor } from 'lucide-react';
+import { Loader2, CheckCircle2, XCircle, Palette, Monitor, RefreshCw, Search } from 'lucide-react';
 
 interface SettingsDialogProps {
   open: boolean;
@@ -37,6 +39,36 @@ const PROVIDERS: { value: LLMProvider; label: string; description: string }[] = 
   { value: 'custom', label: 'Custom OpenAI API', description: 'Any OpenAI-compatible endpoint' },
 ];
 
+const COMMON_MODELS: Record<string, { value: string; label: string }[]> = {
+  gemini: [
+    { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
+    { value: 'gemini-2.0-flash-lite-preview-02-05', label: 'Gemini 2.0 Flash Lite' },
+    { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro' },
+    { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash' },
+  ],
+  openrouter: [
+    { value: 'google/gemini-2.0-flash-001', label: 'Gemini 2.0 Flash' },
+    { value: 'anthropic/claude-3.5-sonnet', label: 'Claude 3.5 Sonnet' },
+    { value: 'anthropic/claude-3.5-haiku', label: 'Claude 3.5 Haiku' },
+    { value: 'openai/gpt-4o', label: 'GPT-4o' },
+    { value: 'openai/gpt-4o-mini', label: 'GPT-4o Mini' },
+    { value: 'deepseek/deepseek-chat', label: 'DeepSeek V3' },
+    { value: 'meta-llama/llama-3.3-70b-instruct', label: 'Llama 3.3 70B' },
+  ],
+  nvidia: [
+    { value: 'meta/llama-3.1-405b-instruct', label: 'Llama 3.1 405B' },
+    { value: 'meta/llama-3.3-70b-instruct', label: 'Llama 3.3 70B' },
+    { value: 'mistralai/mistral-large-2-instruct', label: 'Mistral Large 2' },
+    { value: 'nvidia/llama-3.1-nemotron-70b-instruct', label: 'Nemotron 70B' },
+  ],
+  local: [
+    { value: 'llama3:latest', label: 'Llama 3 8B' },
+    { value: 'mistral:latest', label: 'Mistral 7B' },
+    { value: 'phi3:latest', label: 'Phi 3' },
+    { value: 'gemma2:9b', label: 'Gemma 2 9B' },
+  ]
+};
+
 const THEME_COLORS = [
   { name: 'Amethyst', value: '#6d28d9' },
   { name: 'Emerald', value: '#059669' },
@@ -54,10 +86,6 @@ export default function SettingsDialog({ open, onOpenChange, config, onSave, the
       keys: config.keys || {},
       baseUrls: config.baseUrls || {},
       models: config.models || {},
-      // Backwards compatibility
-      ...(config.provider ? { activeProvider: config.provider } : {}),
-      ...(config.apiKey ? { keys: { ...config.keys, [config.provider || 'gemini']: config.apiKey } } : {}),
-      ...(config.model ? { models: { ...config.models, [config.provider || 'gemini']: config.model } } : {})
     };
   });
   const [tempTheme, setTempTheme] = useState<ThemeConfig>(theme);
@@ -65,6 +93,9 @@ export default function SettingsDialog({ open, onOpenChange, config, onSave, the
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<'success' | 'error' | null>(null);
   const [testMessage, setTestMessage] = useState<string | null>(null);
+  const [fetchingModels, setFetchingModels] = useState(false);
+  const [fetchedModels, setFetchedModels] = useState<Record<string, { value: string; label: string }[]>>({});
+  const [showCustomModelInput, setShowCustomModelInput] = useState(false);
 
   const handleTest = async () => {
     setTesting(true);
@@ -126,6 +157,64 @@ export default function SettingsDialog({ open, onOpenChange, config, onSave, the
     }));
   };
 
+  const handleFetchModels = async () => {
+    setFetchingModels(true);
+    const provider = tempConfig.activeProvider;
+    const apiKey = tempConfig.keys[provider];
+    
+    try {
+      let endpoint = '';
+      let headers: Record<string, string> = { 'Content-Type': 'application/json' };
+
+      if (provider === 'openrouter') {
+        endpoint = 'https://openrouter.ai/api/v1/models';
+      } else if (provider === 'local') {
+        const baseUrl = tempConfig.baseUrls[provider] || 'http://localhost:11434/v1';
+        // Note: browser might block this due to CORS if talking directly to localhost
+        // For production Electron, it usually works or we proxy via main.py
+        endpoint = `${baseUrl.replace('/v1', '')}/api/tags`;
+      } else if (provider === 'nvidia') {
+        endpoint = 'https://integrate.api.nvidia.com/v1/models';
+        if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+      } else if (provider === 'gemini') {
+        // Gemini models are fairly static but could be fetched
+        endpoint = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey || process.env.GEMINI_API_KEY}`;
+      }
+
+      if (!endpoint) return;
+
+      const response = await fetch(endpoint, { headers });
+      const data = await response.json();
+
+      let modelsList: { value: string; label: string }[] = [];
+
+      if (provider === 'openrouter') {
+        modelsList = data.data.map((m: any) => ({ value: m.id, label: m.name || m.id }));
+      } else if (provider === 'local') {
+        modelsList = data.models.map((m: any) => ({ value: m.name, label: m.name }));
+      } else if (provider === 'nvidia') {
+        modelsList = data.data.map((m: any) => ({ value: m.id, label: m.id }));
+      } else if (provider === 'gemini') {
+        modelsList = data.models
+          .filter((m: any) => m.supportedGenerationMethods.includes('generateContent'))
+          .map((m: any) => ({ value: m.name.replace('models/', ''), label: m.displayName }));
+      }
+
+      setFetchedModels(prev => ({ ...prev, [provider]: modelsList }));
+    } catch (err) {
+      console.error("Failed to fetch models", err);
+    } finally {
+      setFetchingModels(false);
+    }
+  };
+
+  const currentModels = [
+    ...(COMMON_MODELS[tempConfig.activeProvider] || []),
+    ...(fetchedModels[tempConfig.activeProvider] || [])
+  ].filter((model, index, self) => 
+    index === self.findIndex((m) => m.value === model.value)
+  );
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px] w-[95vw] max-h-[90vh] overflow-y-auto flex flex-col p-0 bg-paper shadow-2xl border-border">
@@ -177,13 +266,62 @@ export default function SettingsDialog({ open, onOpenChange, config, onSave, the
               </div>
 
               <div className="grid gap-2">
-                <label className="text-[10px] md:text-xs font-bold uppercase tracking-wider text-gray-600">Model Name</label>
-                <Input 
-                  className="h-9"
-                  placeholder={tempConfig.activeProvider === 'gemini' ? 'gemini-2.0-flash' : 'e.g. gpt-4o, llama3, etc.'}
-                  value={tempConfig.models[tempConfig.activeProvider] || ''}
-                  onChange={(e) => updateProviderConfig(tempConfig.activeProvider, 'models', e.target.value)}
-                />
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] md:text-xs font-bold uppercase tracking-wider text-gray-600">Model Selection</label>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-6 text-[10px] px-2 gap-1 text-accent font-bold"
+                    onClick={handleFetchModels}
+                    disabled={fetchingModels}
+                  >
+                    {fetchingModels ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                    Refresh Models
+                  </Button>
+                </div>
+                
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <Select 
+                      value={tempConfig.models[tempConfig.activeProvider] || ''} 
+                      onValueChange={(val: string) => {
+                        if (val === 'custom') {
+                          setShowCustomModelInput(true);
+                        } else {
+                          updateProviderConfig(tempConfig.activeProvider, 'models', val);
+                          setShowCustomModelInput(false);
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Select a model" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          <SelectLabel>Recommended Models</SelectLabel>
+                          {currentModels.map(m => (
+                            <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                          ))}
+                        </SelectGroup>
+                        <SelectGroup>
+                          <SelectLabel>Custom</SelectLabel>
+                          <SelectItem value="custom">Enter manually...</SelectItem>
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                
+                {(showCustomModelInput || !currentModels.some(m => m.value === tempConfig.models[tempConfig.activeProvider])) && (
+                  <div className="mt-2 animate-in fade-in slide-in-from-top-1">
+                    <Input 
+                      className="h-9"
+                      placeholder="Enter custom model ID (e.g. gpt-4o)"
+                      value={tempConfig.models[tempConfig.activeProvider] || ''}
+                      onChange={(e) => updateProviderConfig(tempConfig.activeProvider, 'models', e.target.value)}
+                    />
+                  </div>
+                )}
               </div>
 
               {tempConfig.activeProvider !== 'gemini' && (

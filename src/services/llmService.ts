@@ -137,3 +137,34 @@ async function callOpenAICompatible(prompt: string, config: LLMConfig, defaultBa
     throw error;
   }
 }
+
+export async function generateImage(prompt: string, config: LLMConfig): Promise<string> {
+  const apiKey = config.keys.gemini || process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error("Gemini API Key is missing for image generation.");
+
+  try {
+    const ai = new GoogleGenAI({ apiKey });
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash-image',
+      contents: {
+        parts: [{ text: prompt }]
+      },
+      config: {
+        imageConfig: {
+          aspectRatio: "1:1"
+        }
+      }
+    });
+
+    for (const part of response.candidates?.[0]?.content?.parts || []) {
+      if (part.inlineData) {
+        return `data:image/png;base64,${part.inlineData.data}`;
+      }
+    }
+    
+    throw new Error("No image was generated in the response.");
+  } catch (error: any) {
+    console.error("Image generation error:", error);
+    throw new Error(error.message || "Failed to generate image");
+  }
+}

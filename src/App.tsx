@@ -27,13 +27,15 @@ import StoryBible from './components/StoryBible';
 import ToolsPanel from './components/ToolsPanel';
 import SettingsDialog from './components/SettingsDialog';
 import LibraryDialog from './components/LibraryDialog';
+import WorldBuilder from './components/WorldBuilder';
 
 const createNewStory = (): StoryState => ({
   id: crypto.randomUUID(),
   title: "Untitled Story",
   content: "",
   bible: [],
-  lastModified: Date.now()
+  lastModified: Date.now(),
+  isSetup: true
 });
 
 const DEFAULT_LLM_CONFIG: LLMConfig = {
@@ -352,6 +354,16 @@ export default function App() {
                 }}
               />
               <SidebarItem 
+                icon={<Sparkles size={20} />} 
+                label="Genesis Chamber" 
+                active={currentStory?.isSetup} 
+                collapsed={!leftSidebarOpen && !mobileMenuOpen}
+                onClick={() => {
+                  updateStory({ isSetup: true });
+                  setMobileMenuOpen(false);
+                }}
+              />
+              <SidebarItem 
                 icon={<Library size={20} />} 
                 label="Manage Projects" 
                 collapsed={!leftSidebarOpen && !mobileMenuOpen}
@@ -479,43 +491,63 @@ export default function App() {
                   </span>
                 </div>
               </div>
-              <Tooltip>
-                <TooltipTrigger render={
+              
+              {!currentStory?.isSetup && (
+                <>
+                  <Tooltip>
+                    <TooltipTrigger render={
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-8 w-8 text-muted hover:text-accent"
+                        onClick={() => {
+                          setIsAutoSaving(true);
+                          setLastSaved(new Date());
+                          setTimeout(() => setIsAutoSaving(false), 1000);
+                        }}
+                      >
+                        <Save size={18} />
+                      </Button>
+                    } />
+                    <TooltipContent>Save Project</TooltipContent>
+                  </Tooltip>
                   <Button 
                     variant="ghost" 
                     size="icon" 
-                    className="h-8 w-8 text-muted hover:text-accent"
+                    className="text-accent"
                     onClick={() => {
-                      setIsAutoSaving(true);
-                      setLastSaved(new Date());
-                      setTimeout(() => setIsAutoSaving(false), 1000);
+                      if (isLargeScreen) {
+                        setRightSidebarOpen(!rightSidebarOpen);
+                      } else {
+                        setMobileToolsOpen(true);
+                      }
                     }}
                   >
-                    <Save size={18} />
+                    <Sparkles size={20} />
                   </Button>
-                } />
-                <TooltipContent>Save Project</TooltipContent>
-              </Tooltip>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="text-accent"
-                onClick={() => {
-                  if (isLargeScreen) {
-                    setRightSidebarOpen(!rightSidebarOpen);
-                  } else {
-                    setMobileToolsOpen(true);
-                  }
-                }}
-              >
-                <Sparkles size={20} />
-              </Button>
+                </>
+              )}
             </div>
           </header>
 
-          <div className="flex-1 overflow-hidden relative">
+          <div className="flex-1 overflow-hidden relative min-h-0">
             <AnimatePresence mode="wait">
-              {activeTab === 'editor' ? (
+              {currentStory?.isSetup ? (
+                <motion.div
+                  key="setup"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="h-full"
+                >
+                  <WorldBuilder 
+                    story={currentStory} 
+                    llmConfig={llmConfig}
+                    onUpdate={updateStory}
+                    onComplete={() => updateStory({ isSetup: false })}
+                  />
+                </motion.div>
+              ) : activeTab === 'editor' ? (
                 <motion.div 
                   key="editor"
                   initial={{ opacity: 0, y: 10 }}
@@ -540,6 +572,7 @@ export default function App() {
                   <StoryBible 
                     entries={currentStory?.bible || []} 
                     onUpdate={(bible) => updateStory({ bible })} 
+                    llmConfig={llmConfig}
                   />
                 </motion.div>
               )}
@@ -548,56 +581,58 @@ export default function App() {
         </main>
 
         {/* Right Sidebar - AI Tools */}
-        <motion.aside 
-          initial={false}
-          animate={{ 
-            width: isLargeScreen ? (rightSidebarOpen ? 320 : 0) : (mobileToolsOpen ? 320 : 0),
-            x: isLargeScreen ? 0 : (mobileToolsOpen ? 0 : 320)
-          }}
-          className={`
-            fixed lg:relative right-0 h-full border-l border-border bg-secondary flex flex-col z-50 transition-all
-            ${!isLargeScreen && mobileToolsOpen ? 'shadow-2xl' : ''}
-            ${isLargeScreen && !rightSidebarOpen ? 'border-none' : ''}
-          `}
-        >
-          <Button 
-            variant="outline" 
-            size="icon" 
-            onClick={() => setRightSidebarOpen(!rightSidebarOpen)}
-            className={`hidden lg:flex absolute -left-4 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full bg-white shadow-sm z-30 transition-transform ${!rightSidebarOpen ? 'rotate-180' : ''}`}
+        {!currentStory?.isSetup && (
+          <motion.aside 
+            initial={false}
+            animate={{ 
+              width: isLargeScreen ? (rightSidebarOpen ? 320 : 0) : (mobileToolsOpen ? 320 : 0),
+              x: isLargeScreen ? 0 : (mobileToolsOpen ? 0 : 320)
+            }}
+            className={`
+              fixed lg:relative right-0 h-full border-l border-border bg-secondary flex flex-col z-50 transition-all
+              ${!isLargeScreen && mobileToolsOpen ? 'shadow-2xl' : ''}
+              ${isLargeScreen && !rightSidebarOpen ? 'border-none' : ''}
+            `}
           >
-            <ChevronRight size={14} />
-          </Button>
-
-          {(rightSidebarOpen || (!isLargeScreen && mobileToolsOpen)) && (
-            <div className="h-full flex flex-col overflow-hidden w-[320px] min-h-0">
-              <div className="p-4 border-b border-border flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Sparkles size={18} className="text-accent" />
-                  <h2 className="font-semibold text-sm uppercase tracking-wider">AI Writing Tools</h2>
+            <Button 
+              variant="outline" 
+              size="icon" 
+              onClick={() => setRightSidebarOpen(!rightSidebarOpen)}
+              className={`hidden lg:flex absolute -left-4 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full bg-white shadow-sm z-30 transition-transform ${!rightSidebarOpen ? 'rotate-180' : ''}`}
+            >
+              <ChevronRight size={14} />
+            </Button>
+  
+            {(rightSidebarOpen || (!isLargeScreen && mobileToolsOpen)) && (
+              <div className="h-full flex flex-col overflow-hidden w-[320px] min-h-0">
+                <div className="p-4 border-b border-border flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Sparkles size={18} className="text-accent" />
+                    <h2 className="font-semibold text-sm uppercase tracking-wider">AI Writing Tools</h2>
+                  </div>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="lg:hidden"
+                    onClick={() => setMobileToolsOpen(false)}
+                  >
+                    <X size={18} />
+                  </Button>
                 </div>
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className="lg:hidden"
-                  onClick={() => setMobileToolsOpen(false)}
-                >
-                  <X size={18} />
-                </Button>
+                {currentStory && (
+                  <ToolsPanel 
+                    story={currentStory} 
+                    llmConfig={llmConfig} 
+                    onApplyChanges={(newContent) => {
+                      updateStory({ content: newContent });
+                      if (!isLargeScreen) setMobileToolsOpen(false);
+                    }}
+                  />
+                )}
               </div>
-              {currentStory && (
-                <ToolsPanel 
-                  story={currentStory} 
-                  llmConfig={llmConfig} 
-                  onApplyChanges={(newContent) => {
-                    updateStory({ content: newContent });
-                    if (!isLargeScreen) setMobileToolsOpen(false);
-                  }}
-                />
-              )}
-            </div>
-          )}
-        </motion.aside>
+            )}
+          </motion.aside>
+        )}
 
         <SettingsDialog 
           open={settingsOpen} 

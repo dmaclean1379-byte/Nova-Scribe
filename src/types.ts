@@ -18,6 +18,13 @@ export interface StoryBibleEntry {
   name: string;
   description: string;
   tags: string[];
+  imageUrl?: string;
+}
+
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: number;
 }
 
 export interface StoryState {
@@ -25,9 +32,11 @@ export interface StoryState {
   title: string;
   content: string;
   bible: StoryBibleEntry[];
+  chatHistory?: ChatMessage[];
   lastModified: number;
   isDirty?: boolean;
   syncStatus?: 'synced' | 'unsynced' | 'syncing';
+  isSetup?: boolean;
 }
 
 export type ThemeMode = 'light' | 'dark' | 'sepia';
